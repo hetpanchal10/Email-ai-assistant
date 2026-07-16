@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # AI Email Assistant
 
 A human-in-the-loop dashboard that reads unread Gmail messages, drafts replies with Claude, and lets you edit and send them — all from a Streamlit UI.
@@ -55,3 +56,7 @@ _(Add a screenshot of the running Streamlit UI here.)_
 
 - `.env`, `credentials.json`, and `token.json` are gitignored — never commit these.
 - The tone dropdown (Professional / Casual / Urgent) is passed into Claude's system prompt to control the draft's style.
+=======
+# Email-ai-assistant
+An AI-powered email assistant that reads unread Gmail messages, drafts context-aware replies using Google Gemini, and lets you review, edit, and send them through a Streamlit dashboard.
+>>>>>>> 5cebfc7bc03432789677972086ac21a164d181be
