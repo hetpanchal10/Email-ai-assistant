@@ -41,7 +41,11 @@ draft_key = f"draft_{current_email['id']}"
 def generate_draft():
     try:
         with st.spinner("Claude is drafting a reply..."):
-            st.session_state[draft_key] = draft_reply(current_email["body"], tone)
+            new_draft = draft_reply(current_email["body"], tone)
+            st.session_state[draft_key] = new_draft
+            # Update the widget's own state key too — Streamlit ignores value=
+            # on rerun once a widget with this key already exists.
+            st.session_state[f"editor_{current_email['id']}"] = new_draft
     except Exception as e:
         st.error(f"Failed to generate draft: {e}")
 
@@ -62,9 +66,9 @@ with col2:
 
     btn_col1, btn_col2 = st.columns(2)
     with btn_col1:
-        if st.button("🔄 Regenerate", use_container_width=True):
-            generate_draft()
-            st.rerun()
+        # on_click runs BEFORE the script reruns and recreates the widget,
+        # so updating session_state here is safe (unlike doing it after the button check).
+        st.button("🔄 Regenerate", use_container_width=True, on_click=generate_draft)
     with btn_col2:
         if st.button("✉️ Send", type="primary", use_container_width=True):
             try:
