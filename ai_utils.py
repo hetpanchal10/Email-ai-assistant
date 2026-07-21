@@ -5,7 +5,19 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 
 load_dotenv()
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+
+
+def _get_api_key():
+    try:
+        import streamlit as st
+        if "GOOGLE_API_KEY" in st.secrets:
+            return st.secrets["GOOGLE_API_KEY"]
+    except Exception:
+        pass
+    return os.getenv("GOOGLE_API_KEY")
+
+
+genai.configure(api_key=_get_api_key())
 
 SYSTEM_PROMPT = """You are an email-reply assistant. Given the text of an incoming email, draft a reply.
 

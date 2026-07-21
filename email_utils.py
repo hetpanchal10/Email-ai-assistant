@@ -1,5 +1,6 @@
 """Gmail fetching, parsing, and sending — the only file that talks to the Gmail API."""
 import os
+import json
 import base64
 from email.mime.text import MIMEText
 from bs4 import BeautifulSoup
@@ -11,8 +12,27 @@ from googleapiclient.discovery import build
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 
 
+def _get_secret(key):
+    """Read a Streamlit secret if running on Streamlit Cloud (or a local secrets.toml exists)."""
+    try:
+        import streamlit as st
+        return st.secrets[key]
+    except Exception:
+        return None
+
+
 def get_gmail_service():
     creds = None
+
+    # --- Cloud path: token was generated locally once, then stored as a Streamlit secret ---
+    token_secret = _get_secret("GMAIL_TOKEN_JSON")
+    if token_secret:
+        creds = Credentials.from_authorized_user_info(json.loads(token_secret), SCOPES)
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        return build("gmail", "v1", credentials=creds)
+
+    # --- Local path: normal file-based OAuth flow ---
     if os.path.exists("token.json"):
         creds = Credentials.from_authorized_user_file("token.json", SCOPES)
     if not creds or not creds.valid:
