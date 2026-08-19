@@ -1,103 +1,243 @@
-"""Gmail fetching, parsing, and sending — the only file that talks to the Gmail API."""
-import os
-import json
+"""
+Gmail API functions for the currently authenticated
+Streamlit user.
+"""
+
 import base64
+
 from email.mime.text import MIMEText
+
+import streamlit as st
+
 from bs4 import BeautifulSoup
-from google.auth.transport.requests import Request
+
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+
 from googleapiclient.discovery import build
 
-SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 
-
-def _get_secret(key):
-    """Read a Streamlit secret if running on Streamlit Cloud (or a local secrets.toml exists)."""
-    try:
-        import streamlit as st
-        return st.secrets[key]
-    except Exception:
-        return None
+SCOPES = [
+    "https://www.googleapis.com/auth/gmail.modify"
+]
 
 
 def get_gmail_service():
-    creds = None
 
-    # --- Cloud path: token was generated locally once, then stored as a Streamlit secret ---
-    token_secret = _get_secret("GMAIL_TOKEN_JSON")
-    if token_secret:
-        creds = Credentials.from_authorized_user_info(json.loads(token_secret), SCOPES)
-        if creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        return build("gmail", "v1", credentials=creds)
-
-    # --- Local path: normal file-based OAuth flow ---
-    if os.path.exists("token.json"):
-        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file("credentials.json", SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open("token.json", "w") as f:
-            f.write(creds.to_json())
-    return build("gmail", "v1", credentials=creds)
+    if not st.user.is_logged_in:
+        raise RuntimeError(
+            "User is not logged in with Google."
+        )
 
 
-def _extract_body(payload) -> str:
-    """Recursively walk the payload to find and decode the plain text (or HTML) body."""
+    access_token = st.user["access"]
+
+    if not access_token:
+        raise RuntimeError(
+            "Google access token was not available."
+        )
+
+
+    credentials = Credentials(
+        token=access_token,
+        scopes=SCOPES
+    )
+
+
+    return build(
+        "gmail",
+        "v1",
+        credentials=credentials,
+        cache_discovery=False
+    )
+
+
+def _extract_body(payload):
+
     if "parts" in payload:
-        # Prefer text/plain, fall back to text/html
-        for mime_type in ("text/plain", "text/html"):
+
+        for mime_type in (
+            "text/plain",
+            "text/html"
+        ):
+
             for part in payload["parts"]:
-                if part.get("mimeType") == mime_type and part.get("body", {}).get("data"):
-                    raw = base64.urlsafe_b64decode(part["body"]["data"]).decode("utf-8", errors="ignore")
-                    return _strip_html(raw) if mime_type == "text/html" else raw
-        # Nested multipart (e.g. multipart/alternative inside multipart/mixed)
+
+                if (
+                    part.get("mimeType") == mime_type
+                    and part.get("body", {}).get("data")
+                ):
+
+                    raw = base64.urlsafe_b64decode(
+                        part["body"]["data"]
+                    ).decode(
+                        "utf-8",
+                        errors="ignore"
+                    )
+
+                    if mime_type == "text/html":
+                        return _strip_html(raw)
+
+                    return raw
+
+
         for part in payload["parts"]:
+
             result = _extract_body(part)
+
             if result:
                 return result
+
+
     elif payload.get("body", {}).get("data"):
-        raw = base64.urlsafe_b64decode(payload["body"]["data"]).decode("utf-8", errors="ignore")
-        return _strip_html(raw) if payload.get("mimeType") == "text/html" else raw
+
+        raw = base64.urlsafe_b64decode(
+            payload["body"]["data"]
+        ).decode(
+            "utf-8",
+            errors="ignore"
+        )
+
+
+        if payload.get("mimeType") == "text/html":
+
+            return _strip_html(raw)
+
+
+        return raw
+
+
     return ""
 
 
-def _strip_html(html: str) -> str:
-    soup = BeautifulSoup(html, "html.parser")
-    return soup.get_text(separator="\n").strip()
+def _strip_html(html):
+
+    soup = BeautifulSoup(
+        html,
+        "html.parser"
+    )
+
+    return soup.get_text(
+        separator="\n"
+    ).strip()
 
 
-def get_unread_emails(service, max_results=5):
-    results = service.users().messages().list(
-        userId="me", labelIds=["UNREAD"], maxResults=max_results
-    ).execute()
-    messages = results.get("messages", [])
+def get_unread_emails(
+    service,
+    max_results=5
+):
+
+    results = (
+        service.users()
+        .messages()
+        .list(
+            userId="me",
+            labelIds=["UNREAD"],
+            maxResults=max_results
+        )
+        .execute()
+    )
+
+
+    messages = results.get(
+        "messages",
+        []
+    )
+
+
     emails = []
+
+
     for msg in messages:
-        data = service.users().messages().get(userId="me", id=msg["id"], format="full").execute()
-        headers = {h["name"]: h["value"] for h in data["payload"]["headers"]}
+
+        data = (
+            service.users()
+            .messages()
+            .get(
+                userId="me",
+                id=msg["id"],
+                format="full"
+            )
+            .execute()
+        )
+
+
+        headers = {
+            h["name"]: h["value"]
+            for h in data["payload"]["headers"]
+        }
+
+
         emails.append({
+
             "id": msg["id"],
-            "subject": headers.get("Subject", "(no subject)"),
-            "from": headers.get("From", "(unknown)"),
-            "body": _extract_body(data["payload"]),
+
+            "subject": headers.get(
+                "Subject",
+                "(no subject)"
+            ),
+
+            "from": headers.get(
+                "From",
+                "(unknown)"
+            ),
+
+            "body": _extract_body(
+                data["payload"]
+            )
         })
+
+
     return emails
 
 
-def mark_as_read(service, email_id: str):
-    service.users().messages().modify(
-        userId="me", id=email_id, body={"removeLabelIds": ["UNREAD"]}
-    ).execute()
+def mark_as_read(
+    service,
+    email_id
+):
+
+    (
+        service.users()
+        .messages()
+        .modify(
+            userId="me",
+            id=email_id,
+            body={
+                "removeLabelIds": [
+                    "UNREAD"
+                ]
+            }
+        )
+        .execute()
+    )
 
 
-def send_email(service, to: str, subject: str, body: str):
+def send_email(
+    service,
+    to,
+    subject,
+    body
+):
+
     message = MIMEText(body)
+
     message["to"] = to
+
     message["subject"] = subject
-    raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
-    return service.users().messages().send(userId="me", body={"raw": raw}).execute()
+
+
+    raw = base64.urlsafe_b64encode(
+        message.as_bytes()
+    ).decode()
+
+
+    return (
+        service.users()
+        .messages()
+        .send(
+            userId="me",
+            body={
+                "raw": raw
+            }
+        )
+        .execute()
+    )

@@ -1,6 +1,7 @@
 .env
 credentials.json
 token.json
+.streamlit/secrets.toml
 venv/
 __pycache__/
 *.pyc
