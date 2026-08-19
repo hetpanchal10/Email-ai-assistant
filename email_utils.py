@@ -5,20 +5,21 @@ import base64
 from email.mime.text import MIMEText
 
 def get_gmail_service():
-    """Builds the Gmail API service using Streamlit's exposed native access token."""
+    """Builds the Gmail API service dynamically for the currently logged-in user."""
     if not hasattr(st, "user") or not st.user.is_logged_in:
         raise Exception("User is not logged in.")
     
     try:
         access_token = st.user.tokens["access"]
     except KeyError:
-        raise Exception('st.user has no key "access". Verify that expose_tokens = ["id", "access"] is in your Secrets configuration.')
+        raise Exception('st.user has no key "access". Verify that expose_tokens = ["id", "access"] is in your Secrets.')
     
-    # Construct credentials using the active user's OAuth access token
+    # Use the individual user's active session token
     creds = Credentials(token=access_token)
     return build('gmail', 'v1', credentials=creds)
 
 def get_unread_emails(service, max_results=5):
+    """Fetches unread emails strictly from the authenticated user's inbox."""
     results = service.users().messages().list(userId='me', q='is:unread', maxResults=max_results).execute()
     messages = results.get('messages', [])
     
