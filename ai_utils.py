@@ -31,7 +31,7 @@ Rules:
 - Sign off with "Best," on its own line (no name, the user will add their own).
 """
 
-MODEL_NAME = "gemini-2.5-flash"  # stable, fast, widely available on free-tier keys
+MODEL_NAME = "gemini-3.6-flash"  # current-gen flash model, per Google's guidance for this key
 
 
 def draft_reply(email_text: str, tone: str = "Professional") -> str:
